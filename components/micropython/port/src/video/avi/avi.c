@@ -2,6 +2,7 @@
 #include "avi.h"
 #include "stdio.h"
 #include "video.h"
+#include "printf.h"  //cyj add 2019-9-3
 
 
 uint8_t* const AVI_VIDS_FLAG_TBL[2]={(uint8_t*)"00dc",(uint8_t*)"01dc"};
@@ -24,15 +25,22 @@ int avi_init(uint8_t* buf, uint32_t size, avi_t* avi)
 	header=(avi_header_t*)buf; 
 	if(header->riff_id!=AVI_RIFF_ID)return AVI_STATUS_ERR_RIFF;
 	if(header->avi_id!=AVI_AVI_ID)return AVI_STATUS_ERR_AVI;
+        //cyj add 2019-9-3                
+         printk("avi_init---header->riff_id and avi_id is ok   \r\n");
+
 	buf+=sizeof(avi_header_t);
 
 	list_header=(list_header_t*)(buf);						
 	if(list_header->list_id!=AVI_LIST_ID)return AVI_STATUS_ERR_LIST;
 	if(list_header->list_type!=AVI_HDRL_ID)return AVI_STATUS_ERR_HDRL;
+        //cyj add 2019-9-3                
+         printk("avi_init---list header is ok   \r\n");
 	buf+=sizeof(list_header_t);	
 
 	avih_header=(avih_header_t*)(buf);
 	if(avih_header->block_id!=AVI_AVIH_ID)return AVI_STATUS_ERR_AVIH;
+        //cyj add 2019-9-3                
+         printk("avi_init---avih header is ok   \r\n");
 	avi->usec_per_frame=avih_header->usec_per_frame;
 	avi->max_byte_sec=avih_header->max_byte_sec;
 	avi->total_frame=avih_header->total_frame;
@@ -41,16 +49,30 @@ int avi_init(uint8_t* buf, uint32_t size, avi_t* avi)
 	list_header=(list_header_t*)(buf);
 	if(list_header->list_id!=AVI_LIST_ID)return AVI_STATUS_ERR_LIST;
 	if(list_header->list_type!=AVI_STRL_ID)return AVI_STATUS_ERR_STRL;
+        //cyj add 2019-9-3                
+         printk("avi_init---list2 header is ok   \r\n");
 
 	strh_header=(strh_header_t*)(buf+12);
 	if(strh_header->block_id!=AVI_STRH_ID)return AVI_STATUS_ERR_STRH;
+        //cyj add 2019-9-3                
+         printk("avi_init---strh header is ok   \r\n");
  	if(strh_header->stream_type==AVI_VIDS_STREAM)
 	{
-		if(strh_header->handler!=AVI_FORMAT_MJPG)return AVI_STATUS_ERR_FORMAT;
+           //cyj add 2019-9-3                
+           printk("avi_init---strh_header->stream_type==AVI_VIDS_STREAM   \r\n");
+
+		if(strh_header->handler!=AVI_FORMAT_MJPG){
+                     //cyj add 2019-9-3                
+                     printk("avi_init---strh_header->handler!=AVI_FORMAT_MJPG,return= %d  \r\n",AVI_STATUS_ERR_FORMAT);
+                     return AVI_STATUS_ERR_FORMAT;}
 		avi->video_flag=(uint8_t*)AVI_VIDS_FLAG_TBL[0];
 		avi->audio_flag=(uint8_t*)AVI_AUDS_FLAG_TBL[1];
 		bmp_header=(strf_bmp_header_t*)(buf+12+strh_header->block_size+8);
-		if(bmp_header->block_id!=AVI_STRF_ID)return AVI_STATUS_ERR_STRF;
+		if(bmp_header->block_id!=AVI_STRF_ID){
+                     //cyj add 2019-9-3                
+                     printk("avi_init---bmp_header->block_id!=AVI_STRF_ID,return= %d  \r\n",AVI_STATUS_ERR_STRF);
+                 return AVI_STATUS_ERR_STRF;
+                 }
 		avi->width=bmp_header->bmi_header.width;
 		avi->height=bmp_header->bmi_header.height; 
 		buf+=list_header->block_size+8;
@@ -74,7 +96,11 @@ int avi_init(uint8_t* buf, uint32_t size, avi_t* avi)
 			avi->audio_format=wav_header->format_tag;
 		}
 	}else if(strh_header->stream_type==AVI_AUDS_STREAM)
-	{ 
+	{
+            
+            //cyj add 2019-9-3                
+           printk("avi_init---strh_header->stream_type==AVI_AUDS_STREAM  \r\n");
+
 		avi->video_flag=(uint8_t*)AVI_VIDS_FLAG_TBL[1];
 		avi->audio_flag=(uint8_t*)AVI_AUDS_FLAG_TBL[0];
 		wav_header=(strf_wav_header_t*)(buf+12+strh_header->block_size+8);
@@ -98,6 +124,8 @@ int avi_init(uint8_t* buf, uint32_t size, avi_t* avi)
 	offset=avi_srarch_id(buf_start,size,(uint8_t*)"movi");
 	if(offset==0)
         return AVI_STATUS_ERR_MOVI;
+        //cyj add 2019-9-3                
+        printk("avi_init---avi_srarch_id() is ok  \r\n");
 	avi->offset_movi = offset;
 	if(avi->audio_sample_rate)
 	{

@@ -5,6 +5,8 @@
 #include "video.h"
 #include "mphal.h"
 
+
+#include "printf.h"  //cyj add 2019-9-3
 #include "py_image.h"
 
 
@@ -18,7 +20,9 @@ static void py_video_avi_print(const mp_print_t *print, mp_obj_t self_in, mp_pri
 {
     py_video_avi_obj_t *self = (py_video_avi_obj_t*)self_in;
     avi_t* avi = &self->obj;
-
+    // cyj add 2019-9-2 pring current avi message
+       //cyj add 2019-9-2                
+    printk("py_video_print,rate=%d \n",avi->audio_sample_rate);
     mp_printf(print, "[MaixPy] avi:\n[video] w:%d, h:%d, t:%dus, fps:%.2f, total_frame:%d, status:%d\n"
                 "[audio] format:%d, channel:%d, sample_rate:%d",
                 avi->width, avi->height, avi->usec_per_frame, 1000.0/(avi->usec_per_frame/1000.0), 
@@ -155,8 +159,12 @@ mp_obj_t py_video_open(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args)
     mp_arg_val_t args_parsed[MP_ARRAY_SIZE(machine_video_open_allowed_args)];
     mp_arg_parse_all(n_args - 1, args + 1, kw_args,
         MP_ARRAY_SIZE(machine_video_open_allowed_args), machine_video_open_allowed_args, args_parsed);
+    //cyj add 2019-9-2                
+    printk("py_video_open function  design if avi file == ok \r\n");
+
     if(path[len-1]=='i' && path[len-2]=='v' && path[len-3]=='a' && path[len-4]=='.')
     {
+        
         py_video_avi_obj_t *o = m_new_obj_with_finaliser(py_video_avi_obj_t);
         o->base.type = &py_video_avi_type;
         avi_t* avi = &o->obj;
@@ -179,12 +187,19 @@ mp_obj_t py_video_open(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args)
         }
         else//play avi
         {
+            //cyj addj 2019-9-2 play avi begin at here
+            //cyj add 2019-9-2                
+            printk("py_video_open function  avi file play proc begin \r\n");
             avi->record = false;
             int err = video_play_avi_init(path, avi);
             if(err != 0)
             {
                 m_del_obj(py_video_avi_obj_t, o);
                 mp_raise_OSError(err);
+                //cyj add 2019-9-2
+                
+                printk("[MaixPy] avi play init return error=:%d \r\n",err);
+                
             }
         }
         return MP_OBJ_FROM_PTR(o);

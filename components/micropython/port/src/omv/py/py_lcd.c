@@ -138,12 +138,27 @@ static mp_obj_t py_lcd_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *k
 			height_curr = height_conf;
 			type = LCD_SHIELD;
 			#ifdef CONFIG_BOARD_M5STICK
-				fpioa_set_function(21, FUNC_GPIOHS0 + RST_GPIONUM);
+                                //cyj modify 2019-8-13 develap board bersion
+				/*fpioa_set_function(21, FUNC_GPIOHS0 + RST_GPIONUM);
 				fpioa_set_function(20, FUNC_GPIOHS0 + DCX_GPIONUM);
 				fpioa_set_function(22, FUNC_SPI0_SS0+LCD_SPI_SLAVE_SELECT);
 				fpioa_set_function(19, FUNC_SPI0_SCLK);
-				fpioa_set_function(18, FUNC_SPI0_D0);
-				ret = lcd_init(args[ARG_freq].u_int, false, 52, 40, true, width_curr, height_curr);
+				fpioa_set_function(18, FUNC_SPI0_D0);*/
+
+                                //cyj add 2019-8-19  mk hard version
+                                fpioa_set_function(18, FUNC_GPIOHS0 + RST_GPIONUM);
+				fpioa_set_function(21, FUNC_GPIOHS0 + DCX_GPIONUM);
+				fpioa_set_function(19, FUNC_SPI0_SS0+LCD_SPI_SLAVE_SELECT);
+				fpioa_set_function(22, FUNC_SPI0_SCLK);
+				fpioa_set_function(20, FUNC_SPI0_D0);
+
+
+                                //cyj modify 2019-8-13
+				//ret = lcd_init(args[ARG_freq].u_int, false, 52, 40, true, width_curr, height_curr);
+                                //cyj modify 2019-8-16 rotation zhi qian
+                                //ret = lcd_init(args[ARG_freq].u_int, false, 0, 80, true, 240, 240);
+                                //cyj modify 2019-8-19 rotation zhi hou,default is 80 2019-10-28
+                                ret = lcd_init(args[ARG_freq].u_int, false, 0, 80, true, 240, 240);
 			#else
 				// backlight_init = false;
 				fpioa_set_function(37, FUNC_GPIOHS0 + RST_GPIONUM);
@@ -169,6 +184,11 @@ static mp_obj_t py_lcd_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *k
     }
 	rotation = 0;
 	invert = 0;
+        //rotation init code cyj add 2019-10-28
+        /*width_curr  = width_conf;
+	height_curr = height_conf;*/
+        //py_lcd_rotation(rotation);
+	
     return mp_const_none;
 
 }
@@ -207,7 +227,7 @@ static mp_obj_t py_lcd_get_backlight()
 {
     return mp_const_none;
 }
-
+//cyj add 2019-8-21 size = 153600 rgb565 mode
 static mp_obj_t py_lcd_display(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args)
 {
     image_t *arg_img = py_image_cobj(args[0]);
@@ -364,11 +384,17 @@ STATIC void lcd_set_invert_helper()
 
 STATIC mp_obj_t py_lcd_rotation(size_t n_args, const mp_obj_t *args)
 {
-	if(n_args == 0)	
-		goto end;
+	if(n_args == 0)	goto end;
 	mp_int_t r = mp_obj_get_int(args[0]);
-	if(r != rotation)
+	//if(r != rotation)
 	{
+                //cyj add 2019-8-22 set init 
+                mp_printf(&mp_plat_print, "[MAIXPY]: current rotation = %d\n",r);
+                if((r==1) || (r==2) )lcd_init(CONFIG_LCD_DEFAULT_FREQ, false, 0, 0, true, 240, 240);
+                else if((r==0) || (r==3) )
+                                lcd_init(CONFIG_LCD_DEFAULT_FREQ, false, 0, 80, true, 240, 240); //cyj modify to test 2019-10-30,old is 0,80
+                //cyj end 
+
 		if(!check_rotation(r))
 			mp_raise_ValueError("value:[0,3]");
 		rotation = r;
@@ -390,7 +416,8 @@ STATIC mp_obj_t py_lcd_rotation(size_t n_args, const mp_obj_t *args)
 		{
 			screen_dir = getValueByRotation(rotation);
 			lcd_set_direction((lcd_dir_t)screen_dir);
-		}
+		}                
+                
 	}
 end:
 	return mp_obj_new_int(rotation);
@@ -432,7 +459,7 @@ STATIC mp_obj_t py_lcd_draw_string(size_t n_args, const mp_obj_t *args)
 		mp_raise_OSError(MP_ENOMEM);
 	}
 
-    uint16_t x0 = mp_obj_get_int(args[0]);
+        uint16_t x0 = mp_obj_get_int(args[0]);
 	uint16_t y0 = mp_obj_get_int(args[1]);
 	const char* str  = mp_obj_str_get_str(args[2]);
 	uint16_t fontc = RED;
@@ -443,7 +470,8 @@ STATIC mp_obj_t py_lcd_draw_string(size_t n_args, const mp_obj_t *args)
 		return mp_const_none;
 	int len = strlen(str);
 	int width,height;
-    if(n_args >= 4)
+        //cyj modify format 2019-8-23
+        if(n_args >= 4)
 		fontc = mp_obj_get_int(args[3]);
 	if(n_args >= 5)
 		bgc = mp_obj_get_int(args[4]);
@@ -454,8 +482,14 @@ STATIC mp_obj_t py_lcd_draw_string(size_t n_args, const mp_obj_t *args)
 	memcpy(str_cut,str,len);
 	str_cut[len]=0;
 	width = len*8; height = 16;
-	lcd_ram_draw_string(str_cut, str_buf, fontc, bgc);
-	lcd_draw_picture(x0, y0, width, height, str_buf);
+        //cyj add 2019-8-22 set init 
+        mp_printf(&mp_plat_print, "[MAIXPY]: lcd_draw_string wiedt= %d,string wiedt= %d,str=%s\n",width,height,str);
+	/*
+        lcd_ram_draw_string(str_cut, str_buf, fontc, bgc);
+	lcd_draw_picture(x0, y0, width, height, str_buf);*/
+       
+        lcd_draw_string(x0,y0, str, fontc);
+
 	free(str_buf);
 	free(str_cut);
 	return mp_const_none;

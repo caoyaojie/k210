@@ -20,6 +20,16 @@
 #include "sleep.h"
 #include "global_config.h"
 
+//cyj add 2019-10-22
+#include "HZK16.c"
+#include "unic16hzk.c"
+#include "printf.h"  //cyj add 2019-10-23
+
+
+
+
+
+
 static lcd_ctl_t lcd_ctl;
 
 static uint16_t* g_lcd_display_buff = NULL;
@@ -59,6 +69,123 @@ void lcd_interrupt_enable(void)
 {
     lcd_ctl.mode = 1;
 }
+
+/* cyj add 2019-8-15 
+
+// Initialization sequence for st7789
+// ====================================
+static const uint8_t ST7789V_init[] = {
+  15,                   					        // 15 commands in list
+  TFT_CMD_FRMCTR2, 5, 0x0c, 0x0c, 0x00, 0x33, 0x33,
+  TFT_ENTRYM, 1, 0x45,
+  ST_CMD_VCOMS, 1, 0x2B,
+  TFT_CMD_PWCTR1, 1, 0x2C,
+  TFT_CMD_PWCTR3, 2, 0x01, 0xff,
+  TFT_CMD_PWCTR4, 1, 0x11,
+  TFT_CMD_PWCTR5, 1, 0x20,
+  ST_CMD_FRCTRL2, 1, 0x0f,
+  ST_CMD_PWCTR1, 2, 0xA4, 0xA1,
+  TFT_CMD_GMCTRP1, 14, 0xD0, 0x00, 0x05, 0x0E, 0x15, 0x0D, 0x37, 0x43, 0x47, 0x09, 0x15, 0x12, 0x16, 0x19,
+  TFT_CMD_GMCTRN1, 14, 0xD0, 0x00, 0x05, 0x0D, 0x0C, 0x06, 0x2D, 0x44, 0x40, 0x0E, 0x1C, 0x18, 0x16, 0x19,
+  TFT_MADCTL, 1, (MADCTL_MX | 8),					// Memory Access Control (orientation)
+
+  // have use  cyj add 2019-8-15
+  TFT_CMD_PIXFMT, 1, DISP_COLOR_BITS_16,            // *** INTERFACE PIXEL FORMAT: 0x66 -> 18 bit; 0x55 -> 16 bit
+  TFT_CMD_SLPOUT, TFT_CMD_DELAY, 120,				//  Sleep out,	//  120 ms delay
+  TFT_DISPON, TFT_CMD_DELAY, 120,
+};
+
+
+//ST7789**
+#define ST7789_240x240_XSTART 0
+#define ST7789_240x240_YSTART 80
+
+#define ST7789_TFTWIDTH   240       ///< ST7789 max TFT width
+#define ST7789_TFTHEIGHT  240       ///< ST7789 max TFT height
+
+
+#define ST_CMD_DELAY 0x80 // special signifier for command lists
+
+#define MADCTL_MY  0x80     ///< Right to left
+#define MADCTL_MX  0x40     ///< Bottom to top
+#define MADCTL_MV  0x20     ///< Reverse Mode
+#define MADCTL_ML  0x10     ///< LCD refresh Bottom to top
+#define MADCTL_RGB 0x00     ///< Red-Green-Blue pixel order
+#define MADCTL_BGR 0x08     ///< Blue-Green-Red pixel order
+#define MADCTL_MH  0x04     ///< LCD refresh right to left
+
+
+#define TFT_NOP   	   	  0x00      ///< No-op register
+#define TFT_SWRESET    	  0x01      ///< Software reset register
+#define TFT_RDDID      	  0x04      ///< Read display identification information
+#define TFT_RDDST      	  0x09      ///< Read Display Status 
+#define TFT_SLPIN      	  0x10      ///< Enter Sleep Mode
+#define TFT_SLPOUT     	  0x11      ///< Sleep Out
+#define TFT_PTLON      	  0x12      ///< Partial Mode ON
+#define TFT_NORON      	  0x13      ///< Normal Display Mode ON
+#define TFT_INVOFF     	  0x20      ///< Display Inversion OFF
+#define TFT_INVON      	  0x21      ///< Display Inversion ON 
+#define TFT_GAMMASET   	  0x26      ///< Gamma Set 
+#define TFT_DISPOFF    	  0x28      ///< Display OFF 
+#define TFT_DISPON     	  0x29      ///< Display ON
+#define TFT_CASET      	  0x2A      ///< Column Address Set 
+#define TFT_RASET      	  0x2B      ///< Page Address Set
+#define TFT_RAMWR      	  0x2C      ///< Memory Write
+#define TFT_RAMRD      	  0x2E      ///< Memory Read
+#define TFT_PTLAR      	  0x30      ///< Partial Area
+#define TFT_MADCTL     	  0x36      ///< Memory Access Control
+#define TFT_VSCRSADD  	  0x37      ///< Vertical Scrolling Start Address
+#define TFT_COLMOD     	  0x3A      ///< COLMOD: Pixel Format Set
+#define TFT_RDID1      	  0xDA      ///< Read ID 1
+#define TFT_RDID2      	  0xDB      ///< Read ID 2
+#define TFT_RDID3      	  0xDC      ///< Read ID 3
+#define TFT_GMCTRP1    	  0xE0      ///< Positive Gamma Correction
+#define TFT_GMCTRN1    	  0xE1      ///< Negative Gamma Correction
+
+//ST7789
+#define ST7789_RGBCTL     0xB1      ///< RGB Interface Control
+#define ST7789_PORCTL     0xB2      ///< Porch Setting
+#define ST7789_FRMCTR1    0xB3      ///< Frame Rate Control (In Partial Mode/Idle Mode)
+#define ST7789_FRMCTR2    0xC6      ///< Frame Rate Control (In Normal Mode)
+#define ST7789_GCCTL      0xB7      ///< Gate Control
+#define ST7789_PWCTR1     0xD0      ///< Power Control 1
+#define ST7789_PWCTR2     0xE8      ///< Power Control 2
+#define ST7789_LCMCTRL    0xC0      ///< LCM Control
+#define ST7789_VDVVRHEN   0xC2      ///< VDV and VRH Command Enable
+#define ST7789_VRHSET     0xC3      ///< VRH set
+#define ST7789_VDVSET     0xC4      ///< VDV set
+#define ST7789_VCMOFSET   0xC5      ///< VCOM Offset
+#define ST7789_VCMOSET    0xBB      ///< VCOM Setting
+#define ST7789_RDMODE     0x0A      ///< Read Display Power Mode 
+#define ST7789_RDMADCTL   0x0B      ///< Read Display MADCTL
+#define ST7789_RDPIXFMT   0x0C      ///< Read Display Pixel Format
+#define ST7789_RDIMGFMT   0x0D      ///< Read Display Image Format 
+#define ST7789_RDSELFDIAG 0x0F      ///< Read Display Self-Diagnostic Result
+
+// Color definitions
+#define ST7789_BLACK       TFT_BLACK            ///<   0,   0,   0
+#define ST7789_NAVY        TFT_NAVY             ///<   0,   0, 128
+#define ST7789_DARKGREEN   TFT_DARKGREEN        ///<   0, 128,   0
+#define ST7789_DARKCYAN    TFT_DARKCYAN         ///<   0, 128, 128
+#define ST7789_MAROON      TFT_MAROON           ///< 128,   0,   0
+#define ST7789_PURPLE      TFT_PURPLE           ///< 128,   0, 128
+#define ST7789_OLIVE       TFT_OLIVE            ///< 128, 128,   0
+#define ST7789_LIGHTGREY   TFT_LIGHTGREY        ///< 192, 192, 192
+#define ST7789_DARKGREY    TFT_DARKGREY         ///< 128, 128, 128
+#define ST7789_BLUE        TFT_BLUE             ///<   0,   0, 255
+#define ST7789_GREEN       TFT_GREEN            ///<   0, 255,   0
+#define ST7789_CYAN        TFT_CYAN             ///<   0, 255, 255
+#define ST7789_RED         TFT_RED              ///< 255,   0,   0
+#define ST7789_MAGENTA     TFT_MAGENTA          ///< 255,   0, 255
+#define ST7789_YELLOW      TFT_YELLOW           ///< 255, 255,   0
+#define ST7789_WHITE       TFT_WHITE            ///< 255, 255, 255
+#define ST7789_ORANGE      TFT_ORANGE           ///< 255, 165,   0
+#define ST7789_GREENYELLOW TFT_GREENYELLOW      ///< 173, 255,  47
+#define ST7789_PINK        TFT_PINK             ///< 255, 128, 192
+
+tft_write_byte(uint8_t *data_buf, uint32_t length)
+
+*/
 
 int lcd_init(uint32_t freq, bool oct, uint16_t offset_w, uint16_t offset_h, bool invert_color, uint16_t width, uint16_t height)
 {
@@ -104,6 +231,12 @@ int lcd_init(uint32_t freq, bool oct, uint16_t offset_w, uint16_t offset_h, bool
     tft_write_command(DISPALY_ON);
     msleep(100);
     lcd_polling_enable();
+ 
+    //cyj add 2019-10-29 
+    fpioa_set_function(23, FUNC_GPIOHS0 + 7);
+    gpiohs_set_drive_mode(7, GPIO_DM_OUTPUT);
+    gpiohs_set_pin(7, GPIO_PV_HIGH);
+
     return 0;
 }
 
@@ -200,6 +333,61 @@ void lcd_draw_point(uint16_t x, uint16_t y, uint16_t color)
     tft_write_byte((uint8_t*)&color, 2);
 }
 
+
+//cyj add 2019-10-21 process chinese begin
+uint8_t if_debug=0;
+int	TFT_X = 0;
+int	TFT_Y = 0;
+uint16_t hzcolor;
+unsigned char key_bit[8] = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
+uint8_t hzk_flag,Cur_HZK16[32];
+uint8_t Get_Curent_HZK(uint32_t hz_offset)
+{   
+    
+    uint32_t offset;
+    if(hzk_flag==0)for(offset=0;offset<32;offset++)Cur_HZK16[offset]=hzk16[hz_offset + offset];
+    else for(offset=0;offset<32;offset++)Cur_HZK16[offset]=unic16hzk[hz_offset + offset];
+    return 0;
+}
+
+
+void lcd_draw_Dot8(uint16_t x, uint16_t y, char ch, uint16_t color)
+{
+    uint8_t j = 0;
+    uint8_t data = 0;
+    data = ch;
+    //data=1;
+    for (j = 0; j < 8; j++)
+        {
+            if (data & 0x80)
+                lcd_draw_point(x + j, y, color);
+            data <<= 1;
+        }
+   
+}
+
+
+
+void hz_disp()
+{
+   uint8_t hz_col,hz_row,ifbit;
+   for(hz_row=0;hz_row<16;hz_row++)
+     for(hz_col=0;hz_col<2;hz_col++) 
+           {
+               ifbit=0;
+               //if(if_debug)mp_printf(&mp_plat_print, "hzdot =:%x",Cur_HZK16[hz_col +hz_row*2]);
+               //for(ifbit=0;ifbit<8;ifbit++)
+                   //if(key_bit[ifbit] & Cur_HZK16[hz_col +hz_row*2])
+                         lcd_draw_Dot8(TFT_X+hz_col*8 + ifbit, TFT_Y+hz_row, Cur_HZK16[hz_col +hz_row*2],hzcolor); 
+                                   		
+           }     
+}
+
+
+
+
+//process chinese end 
+
 void lcd_draw_char(uint16_t x, uint16_t y, char c, uint16_t color)
 {
     uint8_t i = 0;
@@ -221,13 +409,84 @@ void lcd_draw_char(uint16_t x, uint16_t y, char c, uint16_t color)
 
 void lcd_draw_string(uint16_t x, uint16_t y, char *str, uint16_t color)
 {
+    // chinese middle var  cyj add 2019-10-21
+    uint8_t ch;        
+    uint8_t hz_h,hz_l,hz_3;
+    uint16_t hz_unic;
+    uint32_t hz_offset,err;
+    uint8_t i = 0;
+
+    TFT_X = x;
+    TFT_Y = y;
+    hzcolor = color;
+
     while (*str)
     {
-        lcd_draw_char(x, y, *str, color);
-        str++;
-        x += 8;
+        //proces chinest char set  cyj add 2019-10-21
+        ch = *str; // get string character
+        
+        //chinese proc 16*16  cyj 
+        if((ch & 0xf0) == 0xe0)
+                { 
+                  hz_h = ch;
+                  str++;
+                  hz_l = *str;
+                  str++;
+                  hz_3 = *str;
+                  printk("cur is unic hzk code,h=%d,m=%d,L=%d\r\n",hz_h,hz_l,hz_3);  //cyj add 2019-10-22 
+                  if((hz_l & 0xc0) == 0x80 && (hz_3 & 0xc0) == 0x80 )
+                     {
+                        //uint32_t utf8 = (0x00ff0000 & (uint32_t)hz_h << 16) | (0x0000ff00 & (uint32_t)hz_l << 8) | (0x000000ff & (uint32_t)hz_3);
+                        hz_unic = hz_h;
+                        hz_unic = (hz_unic<<12);
+                        hz_l = (hz_l <<2);      
+                        hz_unic +=(hz_l <<4);
+                        hz_3 &=0x3f;
+                        hz_unic +=hz_3;
+                        //if(if_debug)mp_printf(&mp_plat_print, "hzunic =:%x",hz_unic); 
+                        hzk_flag=1;
+                        hz_offset = (hz_unic - 0x4e00)*32;			   
+                        err = Get_Curent_HZK(hz_offset);
+                        hz_disp();			
+                        TFT_X+=16;   //1pix space 
+                        x=TFT_X;
+                        str++;
+                     }
+                 }
+         //gb2312
+         else if (ch > 0xA0) {                           
+                           hz_h = ch;
+                           str++;
+                           hz_l = *str;
+                           printk("cur is gb2312 hzk code,h=%d,L=%d \r\n",hz_h,hz_l);  //cyj add 2019-10-22 
+                           //hz_h = 0xc3;
+                           //hz_l = 0xc0;
+                           hzk_flag=0;
+                           hz_offset = (94*(hz_h-0xa0-1)+(hz_l-0xa0-1))*32;			   
+                           err = Get_Curent_HZK(hz_offset);
+                           //if(if_debug)mp_printf(&mp_plat_print, "hz:h=%d,l=%d offset=: %d,err=:%d",hz_h,hz_l,hz_offset,err);
+                           hz_disp();			
+                           TFT_X+=16;   //1pix space  
+                           x=TFT_X; 
+                           str++;                        
+                       }
+        else
+            {
+		//old process englisht part
+                printk("cur is enligsh code %d\r\n",*str);  //cyj add 2019-10-21 
+		lcd_draw_char(x, y, *str, color);
+		str++;
+		x += 8;
+                TFT_X=x;                         
+            }
     }
 }
+
+/*
+
+cyj add 2019-10-21
+
+*/
 
 void lcd_ram_draw_string(char *str, uint32_t *ptr, uint16_t font_color, uint16_t bg_color)
 {
@@ -244,14 +503,14 @@ void lcd_ram_draw_string(char *str, uint32_t *ptr, uint16_t font_color, uint16_t
     width = 4 * strlen(str);
     while (*str)
     {
-        pdata = (uint8_t *)&ascii0816[(*str) * 16];
+        pdata = (uint8_t *)&ascii0816[(*str) * 16];  //pdata point to dot buffer
         for (i = 0; i < 16; i++)
         {
             data = *pdata++;
-            pixel = ptr + i * width;
+            pixel = ptr + i * width;  //pixel address set 
             for (j = 0; j < 4; j++)
             {
-                switch (data >> 6)
+                switch (data >> 6)  //high 2 bit porcess 
                 {	
                     case 0:
                         *pixel =  bg_color | ((uint32_t)bg_color << 16);

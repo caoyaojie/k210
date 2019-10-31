@@ -89,6 +89,10 @@
 
 #define UART_BUF_LENGTH_MAX 269
 
+// #define MPY_HEAP_SIZE  2* 1024 * 1024
+
+#define MPY_HEAP_SIZE  512* 1024 
+
 uint8_t CPU_freq = 0;
 uint8_t PLL0_freq = 0;
 uint8_t PLL1_freq = 0;
@@ -97,6 +101,9 @@ uint8_t PLL2_freq = 0;
 uint8_t* _fb_base;
 uint8_t* _jpeg_buf;
 
+#if MICROPY_ENABLE_GC
+static char heap[MPY_HEAP_SIZE] __attribute__((aligned(8))); 
+#endif
 
 #if MICROPY_PY_THREAD 
 #define MP_TASK_PRIORITY        4
@@ -113,14 +120,18 @@ void do_str(const char *src, mp_parse_input_kind_t input_kind);
 
 STATIC bool init_sdcard_fs(void) {
     bool first_part = true;
+    printk("sdcard_init_vfs begin \r\n");  //cyj add 2019-8-27 
     for (int part_num = 1; part_num <= 4; ++part_num) {
+    //for (int part_num = 1; part_num <= 1; ++part_num) {
         // create vfs object
         fs_user_mount_t *vfs_fat = m_new_obj_maybe(fs_user_mount_t);
         mp_vfs_mount_t *vfs = m_new_obj_maybe(mp_vfs_mount_t);
         if (vfs == NULL || vfs_fat == NULL) {
+            printk("vfs == NULL || vfs_fat == NULL \r\n");  //cyj add 2019-8-27 
             break;
         }
         vfs_fat->flags = FSUSER_FREE_OBJ;
+        printk("sdcard_init_vfs begin part_num=%i ",part_num);  //cyj add 2019-8-30 
         sdcard_init_vfs(vfs_fat, part_num);
 
         // try to mount the partition
@@ -129,19 +140,21 @@ STATIC bool init_sdcard_fs(void) {
             // couldn't mount
             m_del_obj(fs_user_mount_t, vfs_fat);
             m_del_obj(mp_vfs_mount_t, vfs);
+            printk("f_mount return not ok, errno= %i \r\n",res);  //cyj add 2019-8-27 
         } 
-		else 
-		{
+	else 
+	{
             // mounted via FatFs, now mount the SD partition in the VFS
             if (first_part) {
                 // the first available partition is traditionally called "sd" for simplicity
                 vfs->str = "/sd";
                 vfs->len = 3;
-            } else {
+            } 
+            else {
                 // subsequent partitions are numbered by their index in the partition table
                 if (part_num == 2) {
                     vfs->str = "/sd2";
-                } else if (part_num == 3) {
+                } else if (part_num == 2) {
                     vfs->str = "/sd3";
                 } else {
                     vfs->str = "/sd4";
@@ -158,9 +171,11 @@ STATIC bool init_sdcard_fs(void) {
             }
             if (first_part) {
                 // use SD card as current directory
+                printk("first_part is true, vfs->str=%s \r\n",vfs->str);  //cyj add 2019-8-30 
                 MP_STATE_PORT(vfs_cur) = vfs;
-				first_part = false;
+	        first_part = false;
             }
+           else printk("first_part has existed vfs->str=%s \r\n",vfs->str);  //cyj add 2019-8-30
         }
     }
 	
@@ -286,14 +301,12 @@ void load_config_from_spiffs(config_data_t* config)
 		config->freq_cpu  =  FREQ_CPU_DEFAULT;
 		config->freq_pll1 = FREQ_PLL1_DEFAULT;
 		config->kpu_div   = 1;
-		config->gc_heap_size = CONFIG_MAIXPY_GC_HEAP_SIZE;
 		if(!save_config_to_spiffs(config))
 			printk("save config fail\r\n");
 		return;
 	}
 	else
 	{
-		memset(config, 0, sizeof(config_data_t));
 		ret = SPIFFS_read(&spiffs_user_mount_handle.fs, fd, config, sizeof(config_data_t));
 		if(ret<=0)
 		{
@@ -305,12 +318,7 @@ void load_config_from_spiffs(config_data_t* config)
 			config->freq_cpu = config->freq_cpu<FREQ_CPU_MIN ? FREQ_CPU_MIN : config->freq_cpu;
 			config->freq_pll1 = config->freq_pll1>FREQ_PLL1_MAX ? FREQ_PLL1_MAX : config->freq_pll1;
 			config->freq_pll1 = config->freq_pll1<FREQ_PLL1_MIN ? FREQ_PLL1_MIN : config->freq_pll1;
-			if(config->kpu_div==0)
-				config->kpu_div = 1;
-			if(config->gc_heap_size == 0)
-			{
-				config->gc_heap_size = CONFIG_MAIXPY_GC_HEAP_SIZE;
-			}
+			if(config->kpu_div==0) config->kpu_div = 1;
 		}
 	}
 	SPIFFS_close(&spiffs_user_mount_handle.fs, fd);
@@ -333,15 +341,6 @@ void pyexec_str(vstr_t* str) {
 }
 #endif
 
-// void mp_task(void* arg)
-// {
-//     while(1)
-//     {
-//         printk("---1---\r\n");
-//         vTaskDelay(pdMS_TO_TICKS(1000));
-//     }
-// }
-
 void mp_task(
 	#if MICROPY_PY_THREAD 
 	void *pvParameter
@@ -354,22 +353,13 @@ void mp_task(
 #else
 		volatile void* mp_main_stack_top = (void*)get_sp();
 #endif
-		config_data_t* config = (config_data_t*)pvParameter;
-#if MICROPY_ENABLE_GC
-		void* gc_heap = malloc(config->gc_heap_size);
-		if(!gc_heap){
-			printk("GC heap size too large\r\n");
-			while(1);
-		}
-#endif
-
 soft_reset:
 		// initialise the stack pointer for the main thread
 		mp_stack_set_top((void *)(uint64_t)mp_main_stack_top);
 		//mp_stack_set_limit(MP_TASK_STACK_SIZE - 1024);//Not open MICROPY_STACK_CHECK
 #if MICROPY_ENABLE_GC
-		gc_init(gc_heap, gc_heap + config->gc_heap_size);
-		printk("gc heap=%p-%p(%d)\r\n",gc_heap, gc_heap + config->gc_heap_size, config->gc_heap_size);
+		gc_init(heap, heap + sizeof(heap));
+		printk("gc heap=%p-%p\r\n",heap, heap+sizeof(heap));  //cyj add 2019-8-27 gc heap=0x8016fae0-0x801efae0
 #endif
 		mp_init();
 		mp_obj_list_init(mp_sys_path, 0);
@@ -414,27 +404,37 @@ soft_reset:
 #else
 		MP_STATE_PORT(Maix_stdio_uart) = NULL;
 #endif
-		peripherals_init();
+
 		// initialise peripherals
+        mp_printf(&mp_plat_print, "[MaixPy] begin init sd card \r\n"); // for maixpy ide   cyj add 2019-7-29 print message
 		bool mounted_sdcard = false;
 		bool mounted_flash= false;
 		mounted_flash = mpy_mount_spiffs(&spiffs_user_mount_handle);//init spiffs of flash
 		sd_init();
-		if (sdcard_is_present()) {
-			spiffs_stat  fno;
-        // if there is a file in the flash called "SKIPSD", then we don't mount the SD card
-	        if (!mounted_flash || SPIFFS_stat(&spiffs_user_mount_handle.fs,"SKIPSD",&fno) != SPIFFS_OK){
+		if (sdcard_is_present()) 
+                {
+                   mp_printf(&mp_plat_print, "[MaixPy] sd card is present \r\n"); // for maixpy ide   cyj add 2019-7-29 print message
+                       
+		  spiffs_stat  fno;
+                  // if there is a file in the flash called "SKIPSD", then we don't mount the SD card
+	          if (!mounted_flash || SPIFFS_stat(&spiffs_user_mount_handle.fs,"SKIPSD",&fno) != SPIFFS_OK)
+                  {
+                    mp_printf(&mp_plat_print, "[MaixPy] begin init sd card fs \r\n"); // for maixpy ide   cyj add 2019-7-29 print message
 	            mounted_sdcard = init_sdcard_fs();
-	        }
-    	}
-		if (mounted_sdcard) {
+	          }
+
+    	        }
+		if (mounted_sdcard) 
+                {
+                  mp_printf(&mp_plat_print, "[MaixPy] sd card  is mounted ok \r\n"); // for maixpy ide   cyj add 2019-9-2 print message
 		}
-		// mp_printf(&mp_plat_print, "[MaixPy] init end\r\n"); // for maixpy ide
+                // cyj add 2019-9-3 mount sd card is ok begin to init other
+		peripherals_init();
+		mp_printf(&mp_plat_print, "[MaixPy] init end\r\n"); // for maixpy ide   cyj add 2019-7-29 print init end 
 		// run boot-up scripts
 		mp_hal_set_interrupt_char(CHAR_CTRL_C);
 		pyexec_frozen_module("_boot.py");
-		// if(!is_ide_dbg_mode())
-		// 	pyexec_file_if_exists("boot.py");
+		pyexec_file_if_exists("boot.py");
 
 		do{
 			ide_dbg_init();
@@ -498,10 +498,9 @@ corelock_t  lock;
 volatile dual_func_t dual_func=0;
 void* arg_list[16];
 
-
-void core2_task(void* arg)
+int core1_function(void *ctx)
 {
-	while(1)
+    while(1)
 	{
 		if(dual_func)
 		{//corelock_lock(&lock);
@@ -513,12 +512,7 @@ void core2_task(void* arg)
 		//usleep(1);
 	}
 }
-int core1_function(void *ctx)
-{
-    // vTaskStartScheduler();
-	core2_task(NULL);
-	return 0;
-}
+
 
 int maixpy_main()
 {	
@@ -566,10 +560,9 @@ int maixpy_main()
 						 mp_task, // function entry
 						 "mp_task", //task name
 						 MP_TASK_STACK_LEN, //stack_deepth
-						 &config, //function arg
+						 NULL, //function arg
 						 MP_TASK_PRIORITY, //task priority
 						 &mp_main_task_handle);//task handl
-	// xTaskCreateAtProcessor(1, core2_task, "core2_task", 256, NULL, tskIDLE_PRIORITY+1, NULL );
 	vTaskStartScheduler();
 	for(;;);
 #else
